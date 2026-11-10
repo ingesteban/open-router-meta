@@ -45,11 +45,14 @@ class OpenRouterClient:
         temperature: float | None = None,
         max_tokens: int | None = None,
         json_mode: bool = False,
+        extra: dict[str, Any] | None = None,
     ) -> Completion:
         self._require_key()
         payload = self._payload(messages, model, temperature, max_tokens)
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
+        if extra:
+            payload.update(extra)  # e.g. {"reasoning": {"effort": "low"}, "usage": {"include": True}}
         try:
             resp = await self._http.post("/chat/completions", json=payload)
         except httpx.HTTPError as exc:

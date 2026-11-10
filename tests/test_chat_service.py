@@ -12,7 +12,7 @@ class FakeLLM:
         self.reply = reply
         self.calls: list[dict] = []
 
-    async def complete(self, messages, *, model, temperature=None, max_tokens=None, json_mode=False):
+    async def complete(self, messages, *, model, temperature=None, max_tokens=None, json_mode=False, extra=None):
         self.calls.append({"messages": list(messages), "model": model, "json_mode": json_mode})
         return Completion(text=self.reply, model=model)
 

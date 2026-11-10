@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>The $1 Debate Arena · Muse Ember</title>
+<style>
+  :root { --bg:#0b0d12; --panel:#141822; --line:#262c3a; --text:#e8ebf2; --muted:#8a93a6; --accent:#5b8cff; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family: ui-sans-serif, system-ui, sans-serif; }
+  header { padding:18px 24px 8px; }
+  h1 { margin:0; font-size:22px; letter-spacing:-.01em; } h1 span { color:var(--accent); }
+  .sub { color:var(--muted); font-size:13px; margin-top:4px; }
+  .ask { display:flex; gap:8px; padding:8px 24px 16px; }
+  .ask input[type=text] { flex:1; font-size:18px; padding:12px 14px; border-radius:10px; border:1px solid var(--line); background:var(--panel); color:var(--text); }
+  .ask input[type=number] { width:100px; font-size:16px; padding:10px; border-radius:10px; border:1px solid var(--line); background:var(--panel); color:var(--text); }
+  .ask label { display:flex; align-items:center; gap:6px; color:var(--muted); font-size:13px; white-space:nowrap; }
+  button { font-size:16px; font-weight:700; padding:0 22px; border:0; border-radius:10px; background:var(--accent); color:#fff; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:default; }
+  main { display:grid; grid-template-columns: 1fr 340px; gap:16px; padding:0 24px; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px; }
+  #grid { width:100%; height:430px; display:block; cursor:crosshair; }
+  .stat { display:flex; justify-content:space-between; align-items:baseline; padding:4px 0; }
+  .big { font-size:34px; font-weight:800; font-variant-numeric: tabular-nums; }
+  .k { color:var(--muted); font-size:13px; }
+  .v { font-variant-numeric: tabular-nums; font-weight:600; }
+  .budget { height:8px; background:#222838; border-radius:6px; overflow:hidden; margin:4px 0 12px; }
+  .budget > div { height:100%; width:0; background:linear-gradient(90deg,#33d17a,#f6d32d,#e01b24); transition:width .3s; }
+  .bar { margin:8px 0; } .bar .lbl { display:flex; justify-content:space-between; font-size:13px; margin-bottom:3px; }
+  .bar .track { height:12px; background:#222838; border-radius:6px; overflow:hidden; position:relative; }
+  .bar .fill { height:100%; transition:width .3s; }
+  .bar .ghost { position:absolute; top:0; height:100%; border-right:2px dashed #fff8; }
+  #status { font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--accent); font-weight:700; }
+  #feed { height:118px; overflow:hidden; font-size:14px; line-height:1.45; margin:16px 24px 0; }
+  #feed div { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; } #feed b { font-weight:600; }
+  #verdict { margin:16px 24px 24px; font-size:18px; line-height:1.5; display:none; border-color:#5b8cff66; }
+  #verdict h3 { margin:0 0 6px; font-size:13px; color:var(--accent); letter-spacing:.08em; text-transform:uppercase; }
+  #tip { position:fixed; pointer-events:none; background:#000d; border:1px solid var(--line); padding:8px 10px; border-radius:8px; font-size:13px; max-width:320px; display:none; z-index:5; }
+  .changed { color:#f6d32d; font-weight:700; }
+</style>
+</head>
+<body>
+<header>
+  <h1>The <span>$1</span> Debate Arena</h1>
+  <div class="sub">A city of AI citizens debates your question live · every agent is a Muse Ember call via OpenRouter</div>
+</header>
+
+<div class="ask">
+  <input id="q" type="text" value="Should San Francisco ban cars downtown?" />
+  <input id="n" type="number" value="300" min="10" max="2000" title="agents" />
+  <label><input id="p" type="checkbox" checked /> persuasion round</label>
+  <button id="go">Debate!</button>
+</div>
+
+<main>
+  <div class="panel"><canvas id="grid"></canvas></div>
+  <div class="panel">
+    <div id="status">ready</div>
+    <div class="stat"><span class="big" id="cost">$0.0000</span><span class="k">of $1.00</span></div>
+    <div class="budget"><div id="budgetFill"></div></div>
+    <div class="stat"><span class="k">Agents voted</span><span class="v" id="voted">0</span></div>
+    <div class="stat"><span class="k">Ember calls</span><span class="v" id="calls">0</span></div>
+    <div class="stat"><span class="k">Calls / sec</span><span class="v" id="cps">0</span></div>
+    <div class="stat"><span class="k">Tokens</span><span class="v" id="tokens">0</span></div>
+    <div class="stat"><span class="k">Minds changed</span><span class="v changed" id="changed">–</span></div>
+    <div class="stat"><span class="k">Failed calls</span><span class="v" id="errors">0</span></div>
+    <div class="stat"><span class="k">Run ID</span><span class="v k" id="runid">–</span></div>
+    <div class="stat"><span class="k">$1 would buy</span><span class="v" id="projection">–</span></div>
+    <div id="bars"></div>
+  </div>
+</main>
+
+<div id="feed" class="panel"></div>
+<div id="verdict" class="panel"><h3>⚖️ Verdict</h3><div id="verdictText"></div></div>
+<div id="tip"></div>
+
+<script>
+const COLORS = ["#5b8cff", "#ff6b6b", "#33d17a", "#f6d32d"];
+const $ = (id) => document.getElementById(id);
+const canvas = $("grid"), ctx = canvas.getContext("2d");
+let state = null, timer = null, layout = null, seenFeed = new Set(), pulse = new Map();
+
+function fmtCost(c) { return "$" + c.toFixed(c < 0.01 ? 4 : 3); }
+
+function computeLayout(n) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  canvas.width = w * dpr; canvas.height = h * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const cols = Math.ceil(Math.sqrt(n * w / h)), rows = Math.ceil(n / cols);
+  const cell = Math.min(w / cols, h / rows);
+  return { w, h, cols, rows, cell, ox: (w - cols * cell) / 2, oy: (h - rows * cell) / 2 };
+}
+
+function draw() {
+  if (!state) return;
+  const n = state.votes.length;
+  if (!layout || layout.n !== n) { layout = computeLayout(n); layout.n = n; }
+  const { cols, cell, ox, oy, w, h } = layout;
+  ctx.clearRect(0, 0, w, h);
+  const now = performance.now();
+  state.votes.forEach((v, i) => {
+    const x = ox + (i % cols) * cell + cell / 2, y = oy + Math.floor(i / cols) * cell + cell / 2;
+    const s = v.s2 != null ? v.s2 : v.s;
+    let r = cell * 0.36;
+    const p = pulse.get(i); if (p && now - p < 600) r *= 1 + 0.6 * (1 - (now - p) / 600);
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = s == null ? "#2a3142" : COLORS[s % COLORS.length];
+    ctx.globalAlpha = s == null ? 1 : 0.45 + 0.55 * (v.c || 0.5);
+    ctx.fill(); ctx.globalAlpha = 1;
+    if (v.s2 != null && v.s != null && v.s2 !== v.s) { ctx.lineWidth = 2; ctx.strokeStyle = "#fff"; ctx.stroke(); }
+  });
+  requestAnimationFrame(draw);
+}
+
+function render() {
+  const s = state;
+  $("status").textContent = s.status === "error" ? "error: " + s.error : s.status;
+  $("cost").textContent = fmtCost(s.cost);
+  $("budgetFill").style.width = Math.min(100, s.cost * 100) + "%";
+  const voted = s.votes.filter(v => v.s != null).length;
+  $("voted").textContent = `${voted} / ${s.size}`;
+  $("calls").textContent = s.calls.toLocaleString();
+  $("cps").textContent = s.calls_per_sec;
+  $("tokens").textContent = s.tokens.toLocaleString();
+  $("errors").textContent = s.errors;
+  $("errors").style.color = s.errors ? "#ff6b6b" : "";
+  $("runid").innerHTML = `<a href="/api/arena/${s.id}" target="_blank" style="color:inherit">${s.id}</a>`;
+  $("changed").textContent = s.counts_after ? `${s.changed} (${voted ? Math.round(100 * s.changed / voted) : 0}%)` : "–";
+  $("projection").textContent = s.cost > 0 && voted ? `${Math.floor(voted / s.cost).toLocaleString()} opinions` : "–";
+
+  const total = Math.max(1, s.counts.reduce((a, b) => a + b, 0));
+  const after = s.counts_after || s.counts;
+  $("bars").innerHTML = s.stances.map((name, i) => {
+    const now = after[i], before = s.counts[i];
+    return `<div class="bar"><div class="lbl"><span style="color:${COLORS[i]}">● ${name}</span>
+      <span>${Math.round(100 * now / total)}%${s.counts_after && now !== before ? ` <span class="k">(was ${Math.round(100 * before / total)}%)</span>` : ""}</span></div>
+      <div class="track"><div class="fill" style="width:${100 * now / total}%;background:${COLORS[i]}"></div>
+      ${s.counts_after ? `<div class="ghost" style="left:${100 * before / total}%"></div>` : ""}</div></div>`;
+  }).join("");
+
+  // feed: newest arguments + mind changes
+  const feed = $("feed");
+  s.votes.forEach((v, i) => {
+    const key1 = i + ":1", key2 = i + ":2";
+    if (v.s != null && v.a && !seenFeed.has(key1)) {
+      seenFeed.add(key1); pulse.set(i, performance.now());
+      addFeed(`<b style="color:${COLORS[v.s]}">${v.who}:</b> ${esc(v.a)}`);
+    }
+    if (v.s2 != null && v.s2 !== v.s && !seenFeed.has(key2)) {
+      seenFeed.add(key2); pulse.set(i, performance.now());
+      addFeed(`<span class="changed">↻ ${v.who} switched to ${esc(s.stances[v.s2])}:</span> ${esc(v.a2)}`);
+    }
+  });
+
+  if (s.verdict) { $("verdict").style.display = "block"; $("verdictText").textContent = s.verdict; }
+  if (s.status === "done" || s.status === "error") { clearInterval(timer); $("go").disabled = false; }
+}
+
+function addFeed(html) {
+  const d = document.createElement("div"); d.innerHTML = html;
+  const feed = $("feed"); feed.prepend(d);
+  while (feed.children.length > 6) feed.lastChild.remove();
+}
+function esc(t) { return (t || "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+async function poll(id) {
+  try {
+    const r = await fetch(`/api/arena/${id}`);
+    if (r.ok) { state = await r.json(); render(); }
+  } catch (e) {}
+}
+
+$("go").addEventListener("click", async () => {
+  $("go").disabled = true; $("verdict").style.display = "none"; $("feed").innerHTML = "";
+  seenFeed = new Set(); pulse = new Map(); layout = null;
+  const r = await fetch("/api/arena", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question: $("q").value, size: +$("n").value, persuade: $("p").checked }),
+  });
+  if (!r.ok) { $("status").textContent = "error: " + (await r.text()); $("go").disabled = false; return; }
+  const { id } = await r.json();
+  const first = !state; await poll(id); if (first) requestAnimationFrame(draw);
+  timer = setInterval(() => poll(id), 400);
+});
+
+canvas.addEventListener("mousemove", (e) => {
+  const tip = $("tip");
+  if (!state || !layout) return;
+  const rect = canvas.getBoundingClientRect();
+  const col = Math.floor((e.clientX - rect.left - layout.ox) / layout.cell);
+  const row = Math.floor((e.clientY - rect.top - layout.oy) / layout.cell);
+  const i = row * layout.cols + col, v = state.votes[i];
+  if (col < 0 || col >= layout.cols || !v || v.s == null) { tip.style.display = "none"; return; }
+  tip.innerHTML = `<b>${v.who}</b><br><span style="color:${COLORS[v.s]}">${esc(state.stances[v.s])}</span>: ${esc(v.a)}`
+    + (v.s2 != null && v.s2 !== v.s ? `<br><span class="changed">↻ now ${esc(state.stances[v.s2])}:</span> ${esc(v.a2)}` : "");
+  tip.style.display = "block"; tip.style.left = e.clientX + 14 + "px"; tip.style.top = e.clientY + 14 + "px";
+});
+canvas.addEventListener("mouseleave", () => $("tip").style.display = "none");
+window.addEventListener("resize", () => { layout = null; });
+</script>
+</body>
+</html>

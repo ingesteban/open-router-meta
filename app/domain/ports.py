@@ -6,7 +6,7 @@ so swapping providers or faking them in tests never touches use cases.
 
 from __future__ import annotations
 
-from typing import AsyncIterator, Protocol, Sequence
+from typing import Any, AsyncIterator, Protocol, Sequence
 
 from app.domain.entities import Completion, Message, ModelInfo
 
@@ -20,6 +20,7 @@ class LLMClient(Protocol):
         temperature: float | None = None,
         max_tokens: int | None = None,
         json_mode: bool = False,
+        extra: dict[str, Any] | None = None,
     ) -> Completion: ...
 
     def stream(

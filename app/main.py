@@ -9,6 +9,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 
+from app.application.arena_service import ArenaService
 from app.application.chat_service import ChatService
 from app.core.config import get_settings
 from app.domain.exceptions import (
@@ -19,6 +20,7 @@ from app.domain.exceptions import (
     LLMRateLimitError,
 )
 from app.infrastructure.openrouter_client import OpenRouterClient
+from app.presentation.arena_routes import router as arena_router
 from app.presentation.routes import router
 
 STATIC_DIR = Path(__file__).parent / "presentation" / "static"
@@ -36,6 +38,13 @@ async def lifespan(app: FastAPI):
     )
     app.state.chat_service = ChatService(client, s.default_model)
     app.state.default_model = s.default_model
+    app.state.arena_service = ArenaService(
+        client,
+        s.default_model,
+        concurrency=s.arena_concurrency,
+        reasoning_effort=s.arena_reasoning_effort or None,
+    )
+    app.state.arena_max_agents = s.arena_max_agents
     yield
     await client.aclose()
 
@@ -44,6 +53,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="Muse Build Day Starter", version="0.1.0", lifespan=lifespan)
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
     app.include_router(router)
+    app.include_router(arena_router)
 
     @app.exception_handler(DomainError)
     async def domain_error_handler(_: Request, exc: DomainError):
@@ -62,6 +72,10 @@ def create_app() -> FastAPI:
     @app.get("/", include_in_schema=False)
     async def index():
         return FileResponse(STATIC_DIR / "index.html")
+
+    @app.get("/arena", include_in_schema=False)
+    async def arena():
+        return FileResponse(STATIC_DIR / "arena.html")
 
     return app
 

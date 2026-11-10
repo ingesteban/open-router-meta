@@ -72,3 +72,20 @@ curl -s localhost:8000/api/extract -H 'Content-Type: application/json' \
 
 New provider/tool (image gen, transcription, a DB)? Add a port in `domain/ports.py`,
 an adapter in `infrastructure/`, and wire it in `main.py` `lifespan`.
+
+## 🏛️ The $1 Debate Arena (Build Day project)
+
+**Open http://localhost:8000/arena**
+
+Ask any question and a city of AI citizens debates it live. Every citizen is a Muse Ember call via OpenRouter.
+
+1. **Frame**: 1 Ember call proposes 3–4 positions.
+2. **Personas**: generated locally from random traits (free, no LLM calls).
+3. **Vote**: N parallel Ember calls; each persona picks a position and argues it in character.
+4. **Persuasion round**: each citizen hears the strongest rival argument and may switch.
+5. **Verdict**: a judge call summarizes winners, best arguments and who switched.
+
+A live counter shows real `usage.cost` from OpenRouter against the $1 budget, plus how many opinions $1 would buy.
+
+Code: `domain/arena.py` · `application/arena_service.py` · `presentation/arena_routes.py` · `static/arena.html`.
+Tune in `.env`: `ARENA_CONCURRENCY`, `ARENA_REASONING_EFFORT`, `ARENA_MAX_AGENTS`.

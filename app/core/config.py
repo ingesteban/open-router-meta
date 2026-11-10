@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     app_url: str = "http://localhost:8000"
     app_title: str = "Muse Build Day Starter"
     request_timeout_seconds: float = 120.0
+    # Debate Arena
+    arena_concurrency: int = 30
+    arena_reasoning_effort: str = "low"  # empty = don't send the reasoning param
+    arena_max_agents: int = 2000
 
 
 @lru_cache
